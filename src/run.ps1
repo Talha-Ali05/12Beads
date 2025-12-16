@@ -1,0 +1,1 @@
+gcc src/main.cpp -o game.exe -O -Wall -std=c++17 -Wno-missing-braces -I ../include/ -L ../lib/ -lraylib -llua54 -lopengl32 -lgdi32 -lwinmm
