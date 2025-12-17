@@ -1,112 +1,195 @@
 #include <raylib.h>
-#include<iostream>
+#include <cmath>
+#include <cstring>
 
-bool turn = true;
-class Beads{
-    public:
-    Vector2 position;
-    float radius = 10;
-    int type;
-    Beads(Vector2 pos, int t){
-        position = pos;
-        type = t;
-    }
+// copy .vscode folder from the template to compile the project with C++14 standard
+
+// ================= CONFIG =================
+constexpr int TILE_SIZE  = 32;
+constexpr int SCALE      = 2;
+constexpr int BOARD_SIZE = 10;
+
+// ================= TYPES =================
+enum class BeadType {
+    None = 0,
+    Red,
+    Blue
 };
 
-const int TILE_W = 10;
-const int TILE_H = TILE_W;
-const int TILE_SIZE = 32;
-const int SCREEN_SIZE = 2;
-int tileset[TILE_H][TILE_W] = {
-                            {1,0,1,0,1,0,1,0,1,0},
-                            {0,1,0,1,0,1,0,1,0,1},
-                            {1,0,1,0,1,0,1,0,1,0},
-                            {0,1,0,1,0,1,0,1,0,1},
-                            {1,0,1,0,1,0,1,0,1,0},
-                            {0,1,0,1,0,1,0,1,0,1},
-                            {1,0,1,0,1,0,1,0,1,0},
-                            {0,1,0,1,0,1,0,1,0,1},
-                            {1,0,1,0,1,0,1,0,1,0},
-                            {0,1,0,1,0,1,0,1,0,1},
-};
-int beads [TILE_H][TILE_W]= {{1,1,1,1,1,1,1,1,1,1},
-                            {1,1,1,1,1,1,1,1,1,1},
-                            {1,1,1,1,1,1,1,1,1,1},
-                            {0,0,0,0,0,0,0,0,0,0},
-                            {0,0,0,0,0,0,0,0,0,0},
-                            {0,0,0,0,0,0,0,0,0,0},
-                            {0,0,0,0,0,0,0,0,0,0},
-                            {2,2,2,2,2,2,2,2,2,2},
-                            {2,2,2,2,2,2,2,2,2,2},
-                            {2,2,2,2,2,2,2,2,2,2},
-
-};
-void draw_beads(){
-    for(int y = 0 ; y<TILE_H; y++){
-        for (int x = 0; x<TILE_W; x++){
-            if (beads[y][x] != 0){
-                Color c;
-                switch (beads[y][x]){
-                    case 1:
-                        c = RED;
-                        break;
-                    case 2:
-                        c = BLUE;
-                        break;
-                    case 3:
-                        c = GREEN;
-                        break;
-                    default:
-                        c = BLACK;
-                        break;
-                }
-                DrawCircle(x*TILE_SIZE*SCREEN_SIZE + TILE_SIZE*SCREEN_SIZE/2, y*TILE_SIZE*SCREEN_SIZE + TILE_SIZE*SCREEN_SIZE/2, 10*SCREEN_SIZE, c);
-            }
-        }
+Color BeadColor(BeadType type) {
+    switch (type) {
+        case BeadType::Red:  return RED;
+        case BeadType::Blue: return BLUE;
+        default:             return BLANK;
     }
 }
-int main(){
 
-    SetTargetFPS(60);
+// ================= BOARD =================
+class Board {
+public:
+    int tiles[BOARD_SIZE][BOARD_SIZE];
+    BeadType beads[BOARD_SIZE][BOARD_SIZE];
 
-    InitWindow(TILE_W*TILE_SIZE*SCREEN_SIZE,TILE_H*TILE_SIZE*SCREEN_SIZE,"12 Beats");
-    while (! WindowShouldClose())
-    {
-        //Updating
-        Vector2 mouse_position = GetMousePosition();
-        
-        
-        //Event Updating
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)){
-            int tile_x = mouse_position.x / (TILE_SIZE*SCREEN_SIZE);
-            int tile_y = mouse_position.y / (TILE_SIZE*SCREEN_SIZE);
-            if (tile_x >=0 && tile_x < TILE_W && tile_y >=0 && tile_y < TILE_H){
-                beads[tile_y][tile_x] +=1;
-                if (beads[tile_y][tile_x]>3){
-                    beads[tile_y][tile_x] =0;
+    Board() {
+        int tileInit[BOARD_SIZE][BOARD_SIZE] = {
+            {1,0,1,0,1,0,1,0,1,0},
+            {0,1,0,1,0,1,0,1,0,1},
+            {1,0,1,0,1,0,1,0,1,0},
+            {0,1,0,1,0,1,0,1,0,1},
+            {1,0,1,0,1,0,1,0,1,0},
+            {0,1,0,1,0,1,0,1,0,1},
+            {1,0,1,0,1,0,1,0,1,0},
+            {0,1,0,1,0,1,0,1,0,1},
+            {1,0,1,0,1,0,1,0,1,0},
+            {0,1,0,1,0,1,0,1,0,1}
+        };
+
+        memcpy(tiles, tileInit, sizeof(tiles));
+
+        for (int y = 0; y < BOARD_SIZE; y++) {
+            for (int x = 0; x < BOARD_SIZE; x++) {
+                if (y < 3)
+                    beads[y][x] = BeadType::Red;
+                else if (y > 6)
+                    beads[y][x] = BeadType::Blue;
+                else
+                    beads[y][x] = BeadType::None;
+            }
+        }
+    }
+
+    bool IsInside(int x, int y) const {
+        return x >= 0 && x < BOARD_SIZE &&
+               y >= 0 && y < BOARD_SIZE;
+    }
+
+    bool IsDarkTile(int x, int y) const {
+        return tiles[y][x] == 1;
+    }
+};
+
+// ================= RENDERER =================
+class BoardRenderer {
+public:
+    static void Draw(const Board& board, Vector2 selected) {
+        for (int y = 0; y < BOARD_SIZE; y++) {
+            for (int x = 0; x < BOARD_SIZE; x++) {
+
+                Color tileColor =
+                    board.tiles[y][x] ? DARKGRAY : RAYWHITE;
+
+                DrawRectangle(
+                    x * TILE_SIZE * SCALE,
+                    y * TILE_SIZE * SCALE,
+                    TILE_SIZE * SCALE,
+                    TILE_SIZE * SCALE,
+                    tileColor
+                );
+
+                if ((int)selected.x == x && (int)selected.y == y) {
+                    DrawRectangleLinesEx(
+                        {
+                            (float)x * TILE_SIZE * SCALE,
+                            (float)y * TILE_SIZE * SCALE,
+                            (float)TILE_SIZE * SCALE,
+                            (float)TILE_SIZE * SCALE
+                        },
+                        3,
+                        YELLOW
+                    );
+                }
+
+                BeadType bead = board.beads[y][x];
+                if (bead != BeadType::None) {
+                    DrawCircle(
+                        x * TILE_SIZE * SCALE + TILE_SIZE * SCALE / 2,
+                        y * TILE_SIZE * SCALE + TILE_SIZE * SCALE / 2,
+                        10 * SCALE,
+                        BeadColor(bead)
+                    );
                 }
             }
         }
-        if (turn){
-            //Player 1 turn logic
-        } else {
-            //Player 2 turn logic
-        }
-        
-        //Drawing
-        BeginDrawing();
-        for(int y = 0 ; y<TILE_H; y++){
-            for (int x = 0; x<TILE_W; x++){
-                Color c = tileset[y][x] == 1 ? DARKGRAY:RAYWHITE;
-                DrawRectangle(x*TILE_SIZE*SCREEN_SIZE,y*TILE_SIZE*SCREEN_SIZE,TILE_SIZE*SCREEN_SIZE,TILE_SIZE*SCREEN_SIZE,c);
+    }
+};
+
+// ================= GAME =================
+class Game {
+public:
+    Board board;
+    bool redTurn = true;
+    Vector2 selected = {-1, -1};
+
+    void HandleClick(Vector2 mouse) {
+        int x = mouse.x / (TILE_SIZE * SCALE);
+        int y = mouse.y / (TILE_SIZE * SCALE);
+
+        if (!board.IsInside(x, y)) return;
+
+        // No selection yet → try selecting a bead
+        if (selected.x < 0) {
+            BeadType bead = board.beads[y][x];
+            if ((redTurn && bead == BeadType::Red) ||
+                (!redTurn && bead == BeadType::Blue)) {
+                selected = {(float)x, (float)y};
             }
+            return;
         }
-        draw_beads();
-        DrawFPS(10,10);
+
+        // Attempt move
+        TryMove((int)selected.x, (int)selected.y, x, y);
+        selected = {-1, -1};
+    }
+
+    void TryMove(int sx, int sy, int dx, int dy) {
+        // if (!board.IsDarkTile(dx, dy)) return;
+        if (board.beads[dy][dx] != BeadType::None) return;
+
+        int dir = redTurn ? 1 : -1;
+        if (dy - sy == dir && std::abs(dx - sx) == 1) {
+            board.beads[dy][dx] = board.beads[sy][sx];
+            board.beads[sy][sx] = BeadType::None;
+            redTurn = !redTurn;
+        }
+    }
+
+    void DrawUI() const {
+        DrawText(
+            redTurn ? "RED TURN" : "BLUE TURN",
+            10,
+            BOARD_SIZE * TILE_SIZE * SCALE + 10,
+            20,
+            redTurn ? RED : BLUE
+        );
+    }
+};
+
+// ================= MAIN =================
+int main() {
+    const int screenWidth  = BOARD_SIZE * TILE_SIZE * SCALE;
+    const int screenHeight = screenWidth + 50;
+
+    InitWindow(screenWidth, screenHeight, "12 Beads - Movement");
+    SetTargetFPS(60);
+
+    Game game;
+
+    while (!WindowShouldClose()) {
+
+        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+            game.HandleClick(GetMousePosition());
+        }
+
+        BeginDrawing();
         ClearBackground(RAYWHITE);
+
+        BoardRenderer::Draw(game.board, game.selected);
+        game.DrawUI();
+        DrawFPS(10, 10);
+
         EndDrawing();
     }
 
     CloseWindow();
-    
+    return 0;
 }
