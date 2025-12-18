@@ -142,16 +142,44 @@ public:
     }
 
     void TryMove(int sx, int sy, int dx, int dy) {
-        // if (!board.IsDarkTile(dx, dy)) return;
-        if (board.beads[dy][dx] != BeadType::None) return;
+    // 1. Basic validation: destination must be empty and within board
+    if (board.beads[dy][dx] != BeadType::None) return;
 
-        int dir = redTurn ? 1 : -1;
-        if (dy - sy == dir && std::abs(dx - sx) == 1) {
-            board.beads[dy][dx] = board.beads[sy][sx];
-            board.beads[sy][sx] = BeadType::None;
-            redTurn = !redTurn;
+    int diffX = dx - sx;
+    int diffY = dy - sy;
+    int absX = std::abs(diffX);
+    int absY = std::abs(diffY);
+
+    // 2. KING MOVEMENT: Move exactly 1 square in any direction
+    if (absX <= 1 && absY <= 1) {
+        board.beads[dy][dx] = board.beads[sy][sx];
+        board.beads[sy][sx] = BeadType::None;
+        redTurn = !redTurn; // Switch turn
+    }
+    // 3. CAPTURE MOVEMENT: Jump exactly 2 squares in any direction
+    else if (absX == 2 || absY == 2) {
+        // Must move 0 or 2, not 1 (prevents "L" shapes or invalid diagonals)
+        if ((absX == 0 || absX == 2) && (absY == 0 || absY == 2)) {
+            
+            // Find the square being jumped over
+            int midX = sx + diffX / 2;
+            int midY = sy + diffY / 2;
+            BeadType middleBead = board.beads[midY][midX];
+
+            // Check if there is an opponent's bead in the middle
+            bool isOpponent = (redTurn && middleBead == BeadType::Blue) || 
+                              (!redTurn && middleBead == BeadType::Red);
+
+            if (isOpponent) {
+                // Perform Capture
+                board.beads[dy][dx] = board.beads[sy][sx]; // Move player
+                board.beads[sy][sx] = BeadType::None;      // Clear start
+                board.beads[midY][midX] = BeadType::None;  // Remove captured bead
+                
+            }
         }
     }
+};
 
     void DrawUI() const {
         DrawText(
